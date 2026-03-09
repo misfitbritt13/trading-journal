@@ -611,7 +611,8 @@
       </div>
     </div>
 
-    <div class="submit-row">
+    <div class="submit-row" style="gap:12px;display:flex;justify-content:flex-end">
+      <button class="btn-primary" style="background:none;border:1px solid var(--border);color:var(--muted);" onclick="clearMorning()">↺ Clear Form</button>
       <button class="btn-primary" onclick="saveMorning()">→ Submit Morning Ritual</button>
     </div>
   </div>
@@ -832,6 +833,29 @@
     if (val === 'GREEN') document.querySelectorAll('.green-opt').forEach(o => o.classList.add('selected'));
     if (val === 'RED') document.querySelectorAll('.red-opt').forEach(o => o.classList.add('selected'));
     if (val === 'FLAT') document.querySelectorAll('.flat-opt').forEach(o => o.classList.add('selected'));
+  }
+
+  // ─── CLEAR MORNING ───
+  function clearMorning() {
+    document.getElementById('m-date').value = today();
+    document.getElementById('m-start').value = '09:15';
+    document.getElementById('m-bias').value = '';
+    document.getElementById('m-energy').value = 5; document.getElementById('m-energy-val').textContent = 5;
+    document.getElementById('m-calm').value = 5; document.getElementById('m-calm-val').textContent = 5;
+    document.getElementById('m-focus').value = 5; document.getElementById('m-focus-val').textContent = 5;
+    document.querySelectorAll('#m-mood-group .emoji-btn').forEach(b => b.classList.remove('selected'));
+    selectedMood = '';
+    document.getElementById('m-focus-on').value = '';
+    document.getElementById('m-action').value = '';
+    document.getElementById('m-avoid').value = '';
+    document.getElementById('m-tickers').value = '';
+    document.getElementById('m-levels').value = '';
+    document.getElementById('m-max-loss').value = '';
+    document.getElementById('m-target').value = '';
+    document.getElementById('m-max-trades').value = '';
+    document.getElementById('m-strategy').value = '';
+    document.getElementById('m-notes').value = '';
+    showToast('Form cleared ✓');
   }
 
   // ─── SAVE MORNING ───
