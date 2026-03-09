@@ -736,6 +736,22 @@
 
   <!-- ===== DASHBOARD ===== -->
   <div class="section" id="tab-dashboard">
+
+    <!-- TAX + EXPORT TOOLBAR -->
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex:1;min-width:240px;">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);white-space:nowrap;">Tax Rate %</span>
+        <input type="number" id="tax-rate" value="25" min="0" max="60"
+          style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;padding:6px 10px;width:70px;outline:none;text-align:center;"
+          oninput="renderDashboard()">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);">Short-term gains rate</span>
+      </div>
+      <button class="btn-primary" style="background:none;border:1px solid var(--border);color:var(--text);padding:12px 18px;" onclick="exportCSV()">⬇ Export CSV (Excel)</button>
+      <button class="btn-primary" style="background:none;border:1px solid var(--border);color:var(--text);padding:12px 18px;" onclick="backupJSON()">⬇ Backup Data</button>
+      <button class="btn-primary" style="background:none;border:1px solid var(--border);color:var(--muted);padding:12px 18px;" onclick="document.getElementById('restore-input').click()">↑ Restore Backup</button>
+      <input type="file" id="restore-input" accept=".json" style="display:none" onchange="restoreJSON(event)">
+    </div>
+
     <div id="dashboard-content">
       <div class="empty-state">
         <div class="icon">📊</div>
@@ -933,6 +949,81 @@
     setTimeout(() => t.classList.remove('show'), 2800);
   }
 
+  // ─── EXPORT CSV ───
+  function exportCSV() {
+    const sessions = db.sessions;
+    if (!sessions.length) { showToast('No data to export', true); return; }
+    const headers = ['Date','Result','P&L','Trades','Win Rate %','Energy','Calm','Focus','Mood','Discipline','Risk Mgmt','Session Quality','Biggest Mistake','Loss Limit','Focus On','Action','Avoid','Tickers','Strategy','What Went Well','Improve Tomorrow','Best Trade','Worst Trade'];
+    const rows = sessions.map(s => [
+      s.date,
+      s.post?.result || '',
+      s.post?.pnl ?? '',
+      s.post?.trades ?? '',
+      s.post?.winrate ?? '',
+      s.morning?.energy ?? '',
+      s.morning?.calm ?? '',
+      s.morning?.focus ?? '',
+      s.morning?.mood || '',
+      s.post?.discipline ?? '',
+      s.post?.risk ?? '',
+      s.post?.quality ?? '',
+      s.post?.mistake || '',
+      s.post?.lossLimit || '',
+      `"${(s.morning?.focusOn||'').replace(/"/g,"'")}"`,
+      `"${(s.morning?.action||'').replace(/"/g,"'")}"`,
+      `"${(s.morning?.avoid||'').replace(/"/g,"'")}"`,
+      `"${(s.morning?.tickers||'').replace(/"/g,"'")}"`,
+      `"${(s.morning?.strategy||'').replace(/"/g,"'")}"`,
+      `"${(s.post?.good||'').replace(/"/g,"'")}"`,
+      `"${(s.post?.improve||'').replace(/"/g,"'")}"`,
+      `"${(s.post?.best||'').replace(/"/g,"'")}"`,
+      `"${(s.post?.worst||'').replace(/"/g,"'")}"`
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trading-journal-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported ✓');
+  }
+
+  // ─── BACKUP JSON ───
+  function backupJSON() {
+    if (!db.sessions.length) { showToast('No data to backup', true); return; }
+    const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trading-journal-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Backup downloaded ✓');
+  }
+
+  // ─── RESTORE JSON ───
+  function restoreJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const restored = JSON.parse(e.target.result);
+        if (!restored.sessions) throw new Error('Invalid backup');
+        db = restored;
+        save();
+        renderDashboard();
+        showToast('Backup restored ✓');
+      } catch {
+        showToast('Invalid backup file', true);
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  }
+
   // ─── DASHBOARD ───
   function renderDashboard() {
     const sessions = db.sessions;
@@ -955,6 +1046,9 @@
     const totalPnl = withPost.reduce((sum, s) => sum + (s.post.pnl || 0), 0);
     const winRate = withPost.length ? Math.round(green / withPost.length * 100) : 0;
     const avgDiscipline = withPost.length ? (withPost.reduce((s,x)=>s+(x.post.discipline||0),0)/withPost.length).toFixed(1) : '-';
+    const taxRate = parseFloat(document.getElementById('tax-rate')?.value || 25) / 100;
+    const taxOwed = totalPnl > 0 ? totalPnl * taxRate : 0;
+    const takeHome = totalPnl - taxOwed;
 
     // Insight
     const highEnergyGreen = withPost.filter(s => s.morning && s.morning.energy >= 7 && s.post.result === 'GREEN').length;
@@ -976,7 +1070,7 @@
 
     document.getElementById('dashboard-content').innerHTML = `
       ${insightHTML}
-      <div class="stats-row">
+      <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
         <div class="stat-card">
           <div class="label">Total P&L</div>
           <div class="value ${totalPnl >= 0 ? 'green' : 'red'}">${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString()}</div>
@@ -993,7 +1087,18 @@
           <div class="label">Avg Discipline</div>
           <div class="value amber">${avgDiscipline}</div>
         </div>
-        <div class="stat-card">
+      </div>
+
+      <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-top:-8px">
+        <div class="stat-card" style="border-left:3px solid var(--red)">
+          <div class="label">Est. Tax Owed (${Math.round(taxRate*100)}%)</div>
+          <div class="value red">${taxOwed > 0 ? '-$'+taxOwed.toLocaleString(undefined,{maximumFractionDigits:0}) : '$0'}</div>
+        </div>
+        <div class="stat-card" style="border-left:3px solid var(--green)">
+          <div class="label">Your Take-Home</div>
+          <div class="value ${takeHome >= 0 ? 'green' : 'red'}">${takeHome >= 0 ? '+' : ''}$${takeHome.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+        </div>
+        <div class="stat-card" style="border-left:3px solid var(--amber)">
           <div class="label">Days Logged</div>
           <div class="value blue">${sessions.length}</div>
         </div>
@@ -1143,3 +1248,4 @@
 </script>
 </body>
 </html>
+
